@@ -13,11 +13,29 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.Group;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
+import com.badlogic.gdx.scenes.scene2d.ui.TextField;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
+
+import static com.mygdx.game.HighScore.updateTable;
 
 public class GameScreen implements Screen {
     private RunnerGame runnerGame;
     private SpriteBatch batch;
     private TextureAtlas atlas;
+
+    private Stage stage;
+    private Skin skin;
+    private boolean paused;
+    //private Group endGameGroup;
+    private TextButton btnPause;
+    //private TextButton btnOK;
 
     private TextureRegion textureBackground;
     private TextureRegion textureGround;
@@ -98,6 +116,73 @@ public class GameScreen implements Screen {
         HighScore.loadTable();
 
         Gdx.input.setInputProcessor(null);
+
+        paused = false;
+        createGUI();
+    }
+
+    public void createGUI () {
+        stage = new Stage(runnerGame.getViewport(), batch);
+        skin = new Skin(atlas);
+        Gdx.input.setInputProcessor(stage); // обрабатываем события ввода на элементы интерфейса stage
+
+        TextButton.TextButtonStyle textButtonStyle = new TextButton.TextButtonStyle(); // стиль кнопки
+        textButtonStyle.up = skin.getDrawable("ground"); // если кнопку никто не трогает
+        textButtonStyle.font = font32;
+        skin.add("tbs", textButtonStyle); // задаем название стиля
+
+        btnPause = new TextButton("P", skin, "tbs");
+        btnPause.setSize(50, 50);
+        btnPause.setPosition(940, 565);
+        stage.addActor(btnPause);
+
+        btnPause.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                paused = !paused;
+            }
+        });
+
+        /*btnOK = new TextButton("ok", skin, "tbs");
+        btnOK.setSize(50, 50);
+        btnOK.setPosition(940, 565);
+
+        TextField.TextFieldStyle tfs= new TextField.TextFieldStyle();
+        tfs.font = font32;
+        tfs.fontColor = Color.WHITE;
+        tfs.background = skin.getDrawable("endGame");
+
+        skin.add("cursor", skin.getDrawable("cursor"));
+        tfs.cursor = skin.getDrawable("cursor");
+        skin.add("tfs", tfs);
+
+        final TextField field = new TextField("Name", skin, "tfs");
+        //stage.addActor(field);
+        field.setSize(250, 50);
+        field.setPosition(680, 565);
+
+        btnOK.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                String name = field.getText();
+
+                if (name.isEmpty()) {
+                    name = "Player";
+                }
+
+                HighScore.updateTable(name, (int)player.getScore());
+            }
+        });
+
+        endGameGroup = new Group(); // группа элементов
+        endGameGroup.addActor(btnOK);
+        endGameGroup.addActor(field);
+        endGameGroup.setVisible(false);
+        endGameGroup.setPosition(0, 0);
+
+        stage.addActor(endGameGroup);*/
+
+        Gdx.input.setInputProcessor(stage);
     }
 
     @Override
@@ -125,17 +210,21 @@ public class GameScreen implements Screen {
         font32.draw(batch, "SCORE: " + (int)player.getScore(), 20, 550);
 
         if (gameOver) {
-            font96.draw(batch, "GAME OVER", 230, 400);
+            font96.draw(batch, "GAME OVER", 0, 400, 1000, 1, false);
             font32.setColor(1, 1, 1, 0.5f + 0.5f * (float) Math.sin(time * 4.0f));
-            font32.draw(batch, "Tap to RESTART", 380, 300);
+            font32.draw(batch, "Tap to RESTART", 0, 300, 1000, 1, false);
             font32.setColor(1, 1, 1, 1);
         }
 
         batch.end();
+
+        stage.draw();
     }
 
     public void restart() { // перезапуск игры после gameOver
         gameOver = false;
+        //endGameGroup.setVisible(false);
+        btnPause.setVisible(true);
         time = 0.0f;
 
         enemies[0].setPosition(800, groundHeight);
@@ -174,29 +263,34 @@ public class GameScreen implements Screen {
     }
 
     public void update (float dt) {
-        time += dt;
+        if (!paused) {
+            time += dt;
 
-        if (!gameOver) {
-            player.update(dt);
+            if (!gameOver) {
+                player.update(dt);
 
-            for (int i = 0; i < enemies.length; i++) {
-                enemies[i].update(dt);
-                if (enemies[i].getPosition().x < player.getPosition().x - playerAnchor - 100) { // если заехали за левую сторону экрана
-                    generateEnemy(i);
+                for (int i = 0; i < enemies.length; i++) {
+                    enemies[i].update(dt);
+                    if (enemies[i].getPosition().x < player.getPosition().x - playerAnchor - 100) { // если заехали за левую сторону экрана
+                        generateEnemy(i);
+                    }
                 }
-            }
 
-            for (int i = 0; i < enemies.length; i++) {
-                if (enemies[i].getHitArea().overlaps(player.getHitArea())) {
-                    gameOver = true;
-                    HighScore.updateTable("Player", (int)player.getScore());
-                    break;
+                for (int i = 0; i < enemies.length; i++) {
+                    if (enemies[i].getHitArea().overlaps(player.getHitArea())) {
+                        gameOver = true;
+                        //endGameGroup.setVisible(true);
+                        btnPause.setVisible(false);
+                        updateTable("Player", (int) player.getScore());
+                        break;
+                    }
                 }
-            }
-        } else
-            if (Gdx.input.justTouched()) {
+            } else if (Gdx.input.justTouched()) {
                 restart();
             }
+        }
+
+            stage.act(dt);
     }
 
     @Override
